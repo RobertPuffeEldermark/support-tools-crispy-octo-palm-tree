@@ -284,7 +284,7 @@ Write-Host " "
 Write-Host " ______ _     _                                _      _   _      _                      _      _______        _   "
 Write-Host "|  ____| |   | |                              | |    | \ | |    | |                    | |    |__   __|      | |  "
 Write-Host "| |__  | | __| | ___ _ __ _ __ ___   __ _ _ __| | __ |  \| | ___| |___      _____  _ __| | __    | | ___  ___| |_ "
-Write-Host "|  __| | |/ _` |/ _ \ '__| '_ ` _ \ / _` | '__| |/ / | . ` |/ _ \ __\ \ /\ / / _ \| '__| |/ /    | |/ _ \/ __| __|"
+Write-Host "|  __| | |/ _  |/ _ \ '__| '_   _ \ / _  | '__| |/ / | .   |/ _ \ __\ \ /\ / / _ \| '__| |/ /    | |/ _ \/ __| __|"
 Write-Host "| |____| | (_| |  __/ |  | | | | | | (_| | |  |   <  | |\  |  __/ |_ \ V  V / (_) | |  |   <     | |  __/\__ \ |_ "
 Write-Host "|______|_|\__,_|\___|_|  |_| |_| |_|\__,_|_|  |_|\_\ |_| \_|\___|\__| \_/\_/ \___/|_|  |_|\_\    |_|\___||___/\__|"
 Write-Host "                                                                                                                  "
@@ -318,13 +318,13 @@ if ($gateway) {
 Test-DNSConnection -DNS1 "$DNS_SERVER1" -DNS2 "$DNS_SERVER2"
 # Test MSPDB server
 Test-ConnectionAndReport -ServerName "$MSPDB_SERVER" -TotalPing ([ref]$mspdb_total) -PacketLoss ([ref]$mspdb_loss)
-
+$progress_counter ++
 # Test NCDB server
 Test-ConnectionAndReport -ServerName "$NCDB_SERVER" -TotalPing ([ref]$ncdb_total) -PacketLoss ([ref]$ncdb_loss)
-
+$progress_counter ++
 # Test viadb server
 Test-ConnectionAndReport -ServerName "$VIADB_SERVER" -TotalPing ([ref]$viadb_total) -PacketLoss ([ref]$viadb_loss)
-
+$progress_counter ++
 # Clear the progress bar
 Write-Progress -Activity "Testing network connectivity" -Status "Complete" -Completed
 
