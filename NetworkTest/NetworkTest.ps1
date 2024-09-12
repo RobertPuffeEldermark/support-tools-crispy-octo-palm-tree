@@ -1,3 +1,10 @@
+# This script is provided "as is" by Eldermark Software to assist with diagnosing network issues. 
+# It is not a definitive test and results should be used alongside other tools.
+
+# Description: This script is intended for Eldermark Support to use to test network connectivity when troubleshooting possible network issues.  
+# Requirements: Windows 10 or later, PowerShell 5.1 or later
+# Usage: Run the script in PowerShell. Follow the prompts to test network connectivity.Results will be displayed at the end of the test.
+
 # Hostnames and IP addresses to test connectivity to
 $DNS_SERVER1 = "8.8.8.8"
 $DNS_SERVER2 = "1.1.1.1"
@@ -185,6 +192,7 @@ function Test-DNSConnection {
 # Function to create log file with network test results
 
 function LogFileRoundup {
+    Write-Host "Please save this file and send it to Eldermark Support for further analysis."
     # Get public IP address
     $publicIP = (Invoke-RestMethod -Uri "http://ipinfo.io/json").ip
 
@@ -280,7 +288,6 @@ Write-Host "=============================="
 Write-Host "=============================="
 Write-Host "=============================="
 Write-Host " "
-Write-Host " "
 Write-Host " ______ _     _                                _      _   _      _                      _      _______        _   "
 Write-Host "|  ____| |   | |                              | |    | \ | |    | |                    | |    |__   __|      | |  "
 Write-Host "| |__  | | __| | ___ _ __ _ __ ___   __ _ _ __| | __ |  \| | ___| |___      _____  _ __| | __    | | ___  ___| |_ "
@@ -290,9 +297,9 @@ Write-Host "|______|_|\__,_|\___|_|  |_| |_| |_|\__,_|_|  |_|\_\ |_| \_|\___|\__
 Write-Host "                                                                                                                  "
 Write-Host "                                                                                                                  "
 Write-Host " "
+Write-Host "Disclaimer: "
+Write-Host "This script is provided as is by Eldermark Software to assist with diagnosing network issues. It is not a definitive test and results should be used alongside other tools."
 Write-Host " "
-Write-Host " "
-Write-Host "This script is intended for Eldermark Support to use to test network connectivity when troubleshooting possible network issues."
 Write-Host "This script will test network connectivity to local network, DNS servers, and Eldermark servers."
 Write-Host "Results will be displayed at the end of the test."
 Write-Host "=============================="
