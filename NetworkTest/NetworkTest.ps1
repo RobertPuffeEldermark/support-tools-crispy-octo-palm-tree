@@ -44,12 +44,18 @@ $forceWriteFile = $false # Set to true to automatically save results to a file
 $logDate = Get-Date -Format "MM-dd-yy-HH-mm"
 
 # Log file path
-$LogFileFolder = "C:\Temp"
+$logFileFolder = "C:\Temp\EldermarkNetworkTest"
 $logFileName = "NetworkTestResults$logDate.txt"
-$logFilePath = "$LogFileFolder\$logFileName"
+$logFilePath = "$logFileFolder\$logFileName"
 $tracertLogFileName = "TracertLog$logDate.txt"
-$tracertLogFilePath = "$LogFileFolder\$tracertLogFileName"
-$transcriptPath = "$LogFileFolder\NetworkTestTranscript$logDate.log"
+$tracertLogFilePath = "$logFileFolder\$tracertLogFileName"
+$transcriptPath = "$logFileFolder\NetworkTestTranscript$logDate.log"
+$resultsFilePath = "$logFileFolder\Eldermark-NetworkTestResults-$env:computername-$logDate.txt" # Full result filepath
+
+# create log file folder if it doesn't exist
+if (-not (Test-Path $logFileFolder)) {
+    New-Item -Path $logFileFolder -ItemType "directory" -Force | Out-Null
+}
 
 ##########################################################
 #### FUNCTIONS ####
@@ -57,55 +63,61 @@ $transcriptPath = "$LogFileFolder\NetworkTestTranscript$logDate.log"
 
 function Test-ConnectionAndReport {
     param (
-        [string]$ServerName,
-        [ref]$TotalPing,
-        [ref]$PacketLoss
+        [string]$serverName,
+        [ref]$totalPing,
+        [ref]$packetLoss
     )
 
     # Check if log file exists, if not create it
     if (-not (Test-Path $logFilePath)) {
-        New-Item -Path $LogFileFolder -Name $logFileName -ItemType "file" -Force | Out-Null
+        New-Item -Path $logFileFolder -Name $logFileName -ItemType "file" -Force | Out-Null
         "`nNetwork Test Results - $(Get-Date)`n" | Out-File -Append $logFilePath
     }
 
     Write-Host "=============================="
-    Write-Host "Testing connection to $ServerName"
+    Write-Host "Testing connection to $serverName"
     Write-Host "=============================="
 
     $progress_counter ++
-    Write-Progress -Activity "Testing network connectivity" -Status "Testing $ServerName - Step $progress_counter" -PercentComplete (($progress_counter / $progress_total) * 100)
+    Write-Progress -Activity "Testing network connectivity" -Status "Testing $serverName - Step $progress_counter" -PercentComplete (($progress_counter / $progress_total) * 100)
 
     # Run the ping command
-    $pingResult = Test-Connection -Count $ping_count -ComputerName $ServerName -ErrorAction SilentlyContinue 
+    $pingResult = Test-Connection -Count $ping_count -ComputerName $serverName -ErrorAction SilentlyContinue 
     $pingResult | Out-File -Append $logFilePath
 
     if ($pingResult) {
         # Aggregate ping times
         $averagePing = [math]::round(($pingResult | Measure-Object -Property ResponseTime -Average).Average, 2)
-        $TotalPing.Value = $averagePing
+        $totalPing.Value = $averagePing
 
-        Write-Host "Average ping to ${ServerName}: $($TotalPing.Value)ms"
+        Write-Host "Average ping to ${ServerName}: $($totalPing.Value)ms"
         
         # Calculate packet loss
         $pingResultCount = $pingResult.Count
         $PacketsLost = $ping_count - $pingResultCount
         $PacketsLostPercentage = ($PacketsLost / $ping_count) * 100
-        $PacketLoss.Value = $PacketsLostPercentage
+        $packetLoss.Value = $PacketsLostPercentage
 
         Write-Host "Packet loss to ${ServerName}: ${PacketsLostPercentage}%"
-    } else {
-        Write-Host "Could not reach $ServerName. Assuming 100% packet loss." -ForegroundColor Red
-        $TotalPing.Value = "ERROR"
-        $PacketLoss.Value = 100
+    } 
+    else {
+        Write-Host "Could not reach $serverName. Assuming 100% packet loss." -ForegroundColor Red
+        $totalPing.Value = "ERROR"
+        $packetLoss.Value = 100
     }
 
     # Check if tracert should be run based on ping time
-    if ($TotalPing.Value -ge $run_tracert_threshold) {
-        Write-Host "Running tracert to $ServerName due to high ping time." -ForegroundColor Yellow
-        Test-Tracert -ServerName $ServerName
+    if ($totalPing.Value -ge $run_tracert_threshold) {
+        Write-Host "Running tracert to $serverName due to high ping time." -ForegroundColor Yellow
+        Test-Tracert -ServerName $serverName
+    }
+    elseif ($packetLoss.Value -ge $ping_loss_threshold) {
+        Write-Host "Running tracert to $serverName due to packet loss." -ForegroundColor Yellow
+        $forceWriteFile = $true
+        Test-Tracert -ServerName $serverName
     }
     else {
-        Write-Host "Skipping tracert. Connection to $ServerName appears to be GOOD." -ForegroundColor Green
+        Write-Host "Skipping tracert. Connection to $serverName appears to be GOOD." -ForegroundColor Green
         $progress_counter ++
     }
 }
@@ -113,24 +125,24 @@ function Test-ConnectionAndReport {
 # Function to analyze tracert output for high latency or timeouts
 function Test-Tracert {
     param (
-        [string]$ServerName
+        [string]$serverName
     )
 
     # Check if log file exists, if not create it
     if (-not (Test-Path $tracertLogFilePath)) {
-        New-Item -Path $LogFileFolder -Name $tracertLogFileName -ItemType "file" -Force | Out-Null
+        New-Item -Path $logFileFolder -Name $tracertLogFileName -ItemType "file" -Force | Out-Null
     }
 
     # Update progress bar
     $progress_counter ++
-    Write-Progress -Activity "Testing network connectivity" -Status "Tracing route to $ServerName - Step $progress_counter" -PercentComplete (($progress_counter / $progress_total) * 100)
+    Write-Progress -Activity "Testing network connectivity" -Status "Tracing route to $serverName - Step $progress_counter" -PercentComplete (($progress_counter / $progress_total) * 100)
 
     # Run tracert command and capture output
-    Write-Host "Tracing route to $ServerName"
-    $tracertContent = tracert $ServerName
+    Write-Host "Tracing route to $serverName"
+    $tracertContent = tracert $serverName
 
     # Add tracert output to full log, adding new lines for each line
-    "`nTracert to $ServerName`n" | Add-Content -Path $tracertLogFilePath
+    "`nTracert to $serverName`n" | Add-Content -Path $tracertLogFilePath
     $tracertContent | Add-Content -Path $tracertLogFilePath
 
     # Parse tracert output for latency values
@@ -146,12 +158,14 @@ function Test-Tracert {
         if ($latency -ge $tracert_latency_threshold) {
             Write-Host "Warning: High latency detected at a hop ($latency ms) Please check logs for more details." -ForegroundColor Yellow
             $highLatencyDetected = $true
+            forceWriteFile = $true
         }
     }
 
     if ($tracertResults.Count -eq 0) {
         Write-Host "Warning: Timeouts or unreachable hops detected." -ForegroundColor Yellow
         $timeoutsDetected = $true
+        forceWriteFile = $true
     }
 
     if (-not $highLatencyDetected -and -not $timeoutsDetected) {
@@ -159,6 +173,7 @@ function Test-Tracert {
     }
 }
 
+# ToDo: Implement speed test
 # # Function for basic speed test
 # function Test-SpeedTest {
 #     $testFile = "http://speedtest.ftp.otenet.gr/files/test100Mb.db"
@@ -182,9 +197,11 @@ function Test-DNSConnection {
     # Check if any of the connections failed
     if ($dns1_total -eq "ERROR" -or $dns2_total -eq "ERROR") {
         Write-Host "DNS connection test failed. Check if the device can connect to the internet. Skipping further tests." -ForegroundColor Red
+        forceWriteFile = $true
         return
     elseif ($dns1_total -ge $ping_threshold -and $dns2_total -ge $ping_threshold) {
         Write-Host "DNS connection test failed. Both DNS servers have high latency." -ForegroundColor Red
+        forceWriteFile = $true
     }
     }
 }
@@ -192,21 +209,35 @@ function Test-DNSConnection {
 # Function to create log file with network test results
 
 function LogFileRoundup {
+    Write-Host "+++++++++++++++++++++++++++++++++++++++++"
+    Write-Host "========================================="
+    Write-Host " "
+    Write-Host "Results saved to $resultsFilePath"
+    Write-Host " "
     Write-Host "Please save this file and send it to Eldermark Support for further analysis."
+    Write-Host " "
+    Write-Host "Eldermark Support"
+    Write-Host "Email: support@eldermark.com"
+    write-Host "Phone: 866-833-2270"
+    Write-Host " "
+    Write-Host "This network test script is provided as is by Eldermark Software to assist with diagnosing network issues. It is not a definitive test and results should be used alongside other tools."
+    Write-Host " "
+    Write-Host "========================================="
+    Write-Host "+++++++++++++++++++++++++++++++++++++++++"
     # Get public IP address
     $publicIP = (Invoke-RestMethod -Uri "http://ipinfo.io/json").ip
 
     # Get content of the tracert log file if it exists
     if (Test-Path $tracertLogFilePath) {
-        $Tracert_Full_Log = Get-Content $tracertLogFilePath -Raw
+        $tracertFullLog = Get-Content $tracertLogFilePath -Raw
     } else {
-        $Tracert_Full_Log = "No tracert logs found."
+        $tracertFullLog = "No tracert logs found."
     }
     # Get content of the network test log file
     $logContent = Get-Content $logFilePath -Raw
     $transcriptContent = Get-Content $transcriptPath -Raw
 
-    $resultsFilePath = "NetworkTestResults.txt"
+
     $results = @"
 Network Test Results - $(Get-Date)
 ==============================
@@ -256,7 +287,7 @@ Ping Count: $ping_count
 Tracert Logs:
 ==============================
 
-$Tracert_Full_Log
+$tracertFullLog
 
 ==============================
 Network Test Logs:
@@ -271,8 +302,9 @@ $transcriptContent
 
 "@
         $results | Out-File $resultsFilePath
-        Write-Host "Results saved to $resultsFilePath"
         Invoke-Item $resultsFilePath
+        Start-Process explorer.exe -ArgumentList "$logFileFolder"
+
 }
 
 ##########################################################
